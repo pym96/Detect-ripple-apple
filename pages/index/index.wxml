@@ -1,0 +1,45 @@
+<!--index.wxml-->
+<scroll-view class="scrollarea" scroll-y type="list">
+  <view class="container">
+    <view class="header">
+      <text class="title">苹果分析应用</text>
+      <text class="description">使用训练好的模型分析苹果</text>
+    </view>
+
+    <view class="card-container">
+      <view class="card" bindtap="navigateToCamera">
+        <view class="card-icon">
+          <text class="icon">📷</text>
+        </view>
+        <view class="card-content">
+          <text class="card-title">相机</text>
+          <text class="card-description">拍摄照片并用AI分析</text>
+        </view>
+      </view>
+
+      <view class="card" bindtap="navigateToUpload">
+        <view class="card-icon">
+          <text class="icon">🖼️</text>
+        </view>
+        <view class="card-content">
+          <text class="card-title">上传</text>
+          <text class="card-description">从相册选择图片</text>
+        </view>
+      </view>
+      
+      <view class="card" bindtap="navigateToRealtime">
+        <view class="card-icon">
+          <text class="icon">🔄</text>
+        </view>
+        <view class="card-content">
+          <text class="card-title">实时检测</text>
+          <text class="card-description">实时监测画面中的苹果</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="footer">
+      <text class="footer-text">使用后端API处理结果</text>
+    </view>
+  </view>
+</scroll-view>

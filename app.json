@@ -1,0 +1,18 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/camera/camera",
+    "pages/upload/upload",
+    "pages/realtime/realtime",
+    "pages/logs/logs"
+  ],
+  "window": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "苹果分析应用",
+    "navigationBarBackgroundColor": "#6200EE"
+  },
+  "style": "v2",
+  "componentFramework": "glass-easel",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

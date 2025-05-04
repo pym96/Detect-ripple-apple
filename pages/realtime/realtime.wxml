@@ -1,0 +1,67 @@
+<view class="container">
+  <!-- 相机组件 -->
+  <camera device-position="{{cameraPosition}}" flash="off" binderror="error" class="camera"></camera>
+  
+  <!-- 实时检测框叠加层 -->
+  <view class="detection-overlay" wx:if="{{boxesInfo.length > 0}}">
+    <block wx:for="{{boxesInfo}}" wx:key="id">
+      <view class="bounding-box" style="{{item.style}} border-color:{{item.color}}">
+        <view class="box-label" style="background-color:{{item.color}}">
+          {{item.label}} {{item.confidencePercent}}%
+        </view>
+      </view>
+    </block>
+  </view>
+  
+  <!-- 无检测结果提示 -->
+  <view class="no-detection-message" wx:if="{{showNoDetectionMessage && isDetecting}}">
+    <view class="message-content">
+      <text class="message-icon">⚠️</text>
+      <text class="message-text">未检测到苹果</text>
+    </view>
+  </view>
+  
+  <!-- 信息和控制叠加层 -->
+  <view class="info-overlay" wx:if="{{overlayVisible}}">
+    <view class="status-info">
+      <text class="info-text">FPS: {{fps}}</text>
+      <text class="info-text">处理时间: {{processingTimeAvgText}}ms</text>
+      <text class="info-text">模式: {{detectionMode === 'continuous' ? '连续' : '单次'}}</text>
+    </view>
+  </view>
+  
+  <!-- 控制按钮 -->
+  <view class="controls">
+    <view class="control-row">
+      <view class="control-button" bindtap="goBack">
+        <text class="icon">←</text>
+      </view>
+      
+      <view class="control-button {{isDetecting ? 'active' : ''}}" bindtap="toggleDetection">
+        <text class="icon">{{isDetecting ? '⏹' : '▶️'}}</text>
+      </view>
+      
+      <view class="control-button" bindtap="switchCamera">
+        <text class="icon">🔄</text>
+      </view>
+    </view>
+    
+    <view class="control-row">
+      <view class="control-button" bindtap="toggleOverlay">
+        <text class="icon">ℹ️</text>
+      </view>
+      
+      <view class="control-button" bindtap="switchDetectionMode">
+        <text class="icon">{{detectionMode === 'continuous' ? '🔄' : '⚡'}}</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 相机指导提示 -->
+  <view class="camera-guide" wx:if="{{!isDetecting}}">
+    <text>点击开始按钮进行实时检测</text>
+  </view>
+  
+  <!-- 隐藏的Canvas用于图像预处理 -->
+  <canvas canvas-id="preProcessCanvas" style="width:640px; height:640px; position:fixed; left:-1000px; top:-1000px"></canvas>
+</view> 

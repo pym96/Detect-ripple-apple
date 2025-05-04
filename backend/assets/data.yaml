@@ -1,0 +1,15 @@
+# 苹果成熟度检测数据集配置
+
+# 训练和验证数据集路径（实际部署时不需要）
+# train: ../train/images
+# val: ../valid/images
+
+# 类别数量
+nc: 4
+
+# 类别名称
+names:
+  0: 100-_ripeness  # 完全成熟
+  1: 50-_ripeness   # 半成熟
+  2: 75-_ripeness   # 75%成熟
+  3: rotten_apple   # 腐烂苹果

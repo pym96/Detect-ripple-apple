@@ -1,0 +1,73 @@
+<view class="container">
+  <block wx:if="{{!showResult}}">
+    <camera device-position="{{cameraPosition}}" flash="off" binderror="error" class="camera"></camera>
+    
+    <view class="controls">
+      <view class="control-button back" bindtap="goBack">
+        <text class="icon">←</text>
+      </view>
+      
+      <view class="control-button capture" bindtap="takePhoto">
+        <view class="capture-inner"></view>
+      </view>
+      
+      <view class="control-button switch" bindtap="switchCamera">
+        <text class="icon">🔄</text>
+      </view>
+    </view>
+    
+    <view class="camera-guide">
+      <text>请将苹果放在框内</text>
+    </view>
+  </block>
+  
+  <block wx:else>
+    <view class="result-container">
+      <view class="image-container">
+        <!-- 如果有处理结果，显示带边界框的图像，否则显示原图 -->
+        <image class="result-image" src="{{resultImageSrc || imageSrc}}" mode="aspectFit" bindload="onImageLoad"></image>
+      </view>
+      
+      <view class="result-controls">
+        <button class="result-button secondary" bindtap="retakePhoto">重新拍摄</button>
+        <button class="result-button primary" bindtap="processImageWithModel">
+          <text wx:if="{{isProcessing}}">处理中...</text>
+          <text wx:else>分析</text>
+        </button>
+      </view>
+      
+      <view class="model-results" wx:if="{{modelResult && formattedResults.length > 0 && !noDetection}}">
+        <text class="result-title">分析结果</text>
+        <!-- 只显示第一个（最高置信度）结果 -->
+        <view class="result-item">
+          <view class="result-row">
+            <text class="result-label">状态：</text>
+            <text class="result-value">{{formattedResults[0].displayLabel}}</text>
+          </view>
+          <view class="result-row">
+            <text class="result-label">置信度：</text>
+            <text class="result-value">{{formattedResults[0].confidenceText}}</text>
+          </view>
+        </view>
+        <view class="result-item">
+          <text class="result-label">处理时间：{{processingTimeText}}ms</text>
+        </view>
+      </view>
+      
+      <!-- 无检测结果的情况 -->
+      <view class="model-results no-detection" wx:if="{{noDetection}}">
+        <text class="result-title">分析结果</text>
+        <view class="result-item">
+          <text class="result-value">未检测到苹果</text>
+          <text class="result-description">请尝试对准苹果重新拍摄，确保苹果在画面中清晰可见</text>
+        </view>
+      </view>
+    </view>
+  </block>
+  
+  <!-- 隐藏的Canvas用于图像预处理 -->
+  <canvas canvas-id="preProcessCanvas" style="width: 640px; height: 640px; position: fixed; left: -1000px; top: -1000px"></canvas>
+  
+  <!-- 隐藏的Canvas用于绘制结果 -->
+  <canvas canvas-id="resultCanvas" style="width: 640px; height: 640px; position: fixed; left: -1000px; top: -1000px"></canvas>
+</view> 

@@ -1,0 +1,9 @@
+train: train/images
+val: valid/images
+test: test/images
+
+names: 
+  0: 100-_ripeness
+  1: 50-_ripeness
+  2: 75-_ripeness
+  3: rotten_apple
