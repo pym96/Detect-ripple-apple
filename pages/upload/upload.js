@@ -333,18 +333,25 @@ Page({
         
         console.log('检测结果类别:', prediction ? prediction.class : '无', '是否腐烂:', isRotten);
         
-        if (isRotten) { // 腐烂苹果
-          this.setData({
-            healthLevel: 0,
-            rotLevel: 100
-          });
-          console.log('设置为腐烂苹果: 健康度=0%, 腐烂度=100%');
-        } else if (prediction) { // 健康苹果
-          this.setData({
-            healthLevel: 100,
-            rotLevel: 0
-          });
-          console.log('设置为健康苹果: 健康度=100%, 腐烂度=0%');
+        if (prediction) {
+          // 获取置信度并转换为百分比
+          const confidencePercent = Math.round(prediction.confidence * 100);
+          
+          if (isRotten) {
+            // 如果是腐烂苹果，腐烂度就是置信度，健康度是100减去腐烂度
+            this.setData({
+              rotLevel: confidencePercent,
+              healthLevel: 100 - confidencePercent
+            });
+            console.log(`腐烂苹果: 腐烂度=${confidencePercent}%, 健康度=${100 - confidencePercent}%`);
+          } else {
+            // 如果是健康苹果，健康度就是置信度，腐烂度是100减去健康度
+            this.setData({
+              healthLevel: confidencePercent,
+              rotLevel: 100 - confidencePercent
+            });
+            console.log(`健康苹果: 健康度=${confidencePercent}%, 腐烂度=${100 - confidencePercent}%`);
+          }
         }
         
         // 尝试绘制边界框

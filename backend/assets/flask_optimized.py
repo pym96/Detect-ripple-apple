@@ -11,8 +11,8 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from pathlib import Path
 import io
-import onnxruntime as ort  # 使用ONNX Runtime进行优化推理
 import traceback
+from openvino.runtime import Core  # 使用OpenVINO Runtime
 
 app = Flask(__name__)
 CORS(app)  # 启用跨域请求支持
@@ -21,7 +21,8 @@ CORS(app)  # 启用跨域请求支持
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 RESULT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results_optimized')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'best.onnx')
+MODEL_XML = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'openvino_model/best.xml')  # OpenVINO XML文件
+MODEL_BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'openvino_model/best.bin')  # OpenVINO BIN文件
 DATA_YAML = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.yaml')
 CONF_THRESHOLD = 0.25  # 置信度阈值
 
@@ -178,36 +179,37 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- ONNX Runtime Session (全局初始化) ---
-print("初始化ONNX Runtime Session...")
+# --- OpenVINO Runtime Session (全局初始化) ---
+print("初始化OpenVINO Runtime...")
 try:
-    sess_options = ort.SessionOptions()
-    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-    sess_options.intra_op_num_threads = 4  # 并行线程数
+    # 创建OpenVINO核心
+    core = Core()
     
-    # 创建ONNX会话
-    onnx_session = ort.InferenceSession(
-        MODEL_PATH, 
-        sess_options=sess_options,
-        providers=['CPUExecutionProvider']  # MacOS上使用CPU执行
-    )
+    # 读取模型
+    model = core.read_model(MODEL_XML)
     
-    # 获取输入输出信息
-    model_inputs = onnx_session.get_inputs()
-    input_shape = model_inputs[0].shape  # [1, 3, 640, 640]
-    input_name = model_inputs[0].name
-    output_name = onnx_session.get_outputs()[0].name
+    # 编译模型 (默认为CPU)
+    compiled_model = core.compile_model(model)
     
-    print(f"ONNX模型加载成功: 输入形状={input_shape}")
+    # 获取输入和输出信息
+    input_layer = compiled_model.input(0)
+    output_layer = compiled_model.output(0)
+    
+    # 获取输入形状
+    input_shape = input_layer.shape
+    input_name = input_layer.any_name
+    output_name = output_layer.any_name
+    
+    print(f"OpenVINO模型加载成功: 输入形状={input_shape}")
     
 except Exception as e:
-    print(f"警告: ONNX模型加载失败: {e}")
+    print(f"警告: OpenVINO模型加载失败: {e}")
     traceback.print_exc()
-    onnx_session = None
+    compiled_model = None
 
-# --- 使用ONNX Runtime模型进行推理 ---
-def run_optimized_inference(img_path, conf_thres=CONF_THRESHOLD, iou_thres=0.45):
-    """使用ONNX Runtime运行优化推理"""
+# --- 使用OpenVINO模型进行推理 ---
+def run_openvino_inference(img_path, conf_thres=CONF_THRESHOLD, iou_thres=0.45):
+    """使用OpenVINO Runtime运行优化推理"""
     start_time = time.time()
 
     # 1. 加载类别名称
@@ -215,8 +217,8 @@ def run_optimized_inference(img_path, conf_thres=CONF_THRESHOLD, iou_thres=0.45)
     colors = get_class_colors(class_names)
     
     # 2. 检查模型和图像
-    if onnx_session is None:
-        return None, [], "错误: ONNX模型未正确加载"
+    if compiled_model is None:
+        return None, [], "错误: OpenVINO模型未正确加载"
     
     if not os.path.isfile(img_path):
         return None, [], f"错误: 图像文件'{img_path}'未找到"
@@ -230,12 +232,12 @@ def run_optimized_inference(img_path, conf_thres=CONF_THRESHOLD, iou_thres=0.45)
 
     # 4. 运行推理
     try:
-        # ONNX Runtime推理
-        outputs = onnx_session.run([output_name], {input_name: input_tensor})
-        output_tensor = outputs[0]
+        # OpenVINO推理
+        results = compiled_model([input_tensor])
+        output_tensor = results[output_layer]
     except Exception as e:
         traceback.print_exc()
-        return None, [], f"错误: ONNX Runtime推理失败: {e}"
+        return None, [], f"错误: OpenVINO推理失败: {e}"
 
     # 5. 后处理结果
     try:
@@ -321,8 +323,8 @@ def detect():
             img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             cv2.imwrite(img_path, img)
         
-        # 运行推理 - 这里使用优化后的ONNX Runtime推理
-        result_img, detections, class_counts = run_optimized_inference(img_path)
+        # 运行推理 - 这里使用优化后的OpenVINO推理
+        result_img, detections, class_counts = run_openvino_inference(img_path)
         
         if result_img is None:
             return jsonify({
@@ -338,35 +340,49 @@ def detect():
         # 构建结果URL（在实际部署中，这应该是完整的URL）
         result_url = f"/api/results/{result_filename}"
         
-        # 计算健康度和腐烂度
+        # 计算健康度和腐烂度 - 修改为根据检测结果的置信度计算
         health_level = 0.0
         rot_level = 0.0
         
-        # 健康度基于成熟度类别（100%、75%、50%成熟度）
-        # 腐烂度基于腐烂苹果类别
-        ripeness_count = 0
-        
-        # 计算健康苹果的总数（所有成熟度类别）
-        if '100-_ripeness' in class_counts:
-            ripeness_count += class_counts['100-_ripeness']
-        if '75-_ripeness' in class_counts:
-            ripeness_count += class_counts['75-_ripeness']
-        if '50-_ripeness' in class_counts:
-            ripeness_count += class_counts['50-_ripeness']
-        
-        # 计算腐烂苹果的数量
-        rotten_count = class_counts.get('rotten_apple', 0)
-        
-        # 计算总苹果数
-        total_apples = ripeness_count + rotten_count
-        
-        if total_apples > 0:
-            # 健康度：健康苹果占总数的百分比
-            health_level = (ripeness_count / total_apples) * 100.0
-            # 腐烂度：腐烂苹果占总数的百分比
-            rot_level = (rotten_count / total_apples) * 100.0
+        # 如果只检测到一个苹果，则直接根据置信度计算健康度和腐烂度
+        if len(detections) == 1:
+            det = detections[0]
+            confidence_percent = det['confidence'] * 100
+            
+            if det['class_name'] == 'rotten_apple':
+                # 腐烂苹果：腐烂度 = 置信度，健康度 = (100 - 置信度)
+                rot_level = confidence_percent
+                health_level = 100 - confidence_percent
+            else:
+                # 健康苹果：健康度 = 置信度，腐烂度 = (100 - 置信度)
+                health_level = confidence_percent
+                rot_level = 100 - confidence_percent
+                
+        # 多个检测结果或无检测结果的情况下，使用类别计数方法
+        else:
+            ripeness_count = 0
+            # 计算健康苹果的总数（所有成熟度类别）
+            if '100-_ripeness' in class_counts:
+                ripeness_count += class_counts['100-_ripeness']
+            if '75-_ripeness' in class_counts:
+                ripeness_count += class_counts['75-_ripeness']
+            if '50-_ripeness' in class_counts:
+                ripeness_count += class_counts['50-_ripeness']
+            
+            # 计算腐烂苹果的数量
+            rotten_count = class_counts.get('rotten_apple', 0)
+            
+            # 计算总苹果数
+            total_apples = ripeness_count + rotten_count
+            
+            if total_apples > 0:
+                # 健康度：健康苹果占总数的百分比
+                health_level = (ripeness_count / total_apples) * 100.0
+                # 腐烂度：腐烂苹果占总数的百分比
+                rot_level = (rotten_count / total_apples) * 100.0
         
         # 返回JSON响应
+        inference_time = time.time() - timestamp
         return jsonify({
             'success': True,
             'detections': detections,
@@ -375,7 +391,7 @@ def detect():
             'detection_count': len(detections),
             'health_level': round(health_level, 2),  # 保留两位小数
             'rot_level': round(rot_level, 2),  # 保留两位小数
-            'processing_time': round(time.time() - timestamp, 2)  # 添加处理时间
+            'processing_time': round(inference_time * 1000, 2)  # 处理时间（毫秒）
         })
     
     except Exception as e:
@@ -396,15 +412,16 @@ def get_result(filename):
 def health_check():
     return jsonify({
         'status': 'ok',
-        'model': os.path.basename(MODEL_PATH),
-        'backend': 'ONNX Runtime (优化版)',
+        'model': os.path.basename(MODEL_XML),
+        'backend': 'OpenVINO Runtime',
         'timestamp': int(time.time())
     })
 
 # 主函数
 if __name__ == '__main__':
     # 打印服务器信息
-    print(f"模型路径: {MODEL_PATH}")
+    print(f"模型XML文件: {MODEL_XML}")
+    print(f"模型BIN文件: {MODEL_BIN}")
     print(f"数据YAML: {DATA_YAML}")
     print(f"上传文件夹: {UPLOAD_FOLDER}")
     print(f"结果文件夹: {RESULT_FOLDER}")
@@ -415,4 +432,4 @@ if __name__ == '__main__':
     
     # 启动Flask服务器
     # 设置debug=False以减少不必要的日志并提高性能
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True) 
+    app.run(host='0.0.0.0', port=8080, debug=False, threaded=True) 
